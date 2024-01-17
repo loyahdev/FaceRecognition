@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Face Recognition App</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
+    <style>
+      @keyframes gradient {
+        0% {
+          background-position: 0% 50%;
+        }
+        50% {
+          background-position: 100% 50%;
+        }
+        100% {
+          background-position: 0% 50%;
+        }
+      }
+
+      body {
+        margin: 0;
+        height: 100vh;
+        padding-top: 0px;
+        background: linear-gradient(135deg, black, #800080, blue, black);
+        background-size: 200% 200%;
+        animation: gradient 5s ease infinite;
+        color: white;
+        font-family: Arial, sans-serif;
+      }
+
+      #logo {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+        width: 50%;
+      }
+
+      #sub-logo {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+        width: 50%;
+        color: lightgray;
+        margin-top: -1.5%;
+      }
+
+      #sub-desc {
+        margin-top: -1%;
+        text-align: center;
+        font-size: 15px;
+      }
+
+      .title {
+        margin-top: 0%;
+      }
+
+      .image-stuff {
+        transform: translateX(2.5%);
+        margin-top: 2%;
+      }
+
+      #calculateButton, #stopButton, #results {
+        transform: translateY(-15px);
+      }
+
+      a {
+        color: blue; /* Sets the link color to blue */
+        text-decoration: none; /* Removes underline from the link */
+      }
+    
+      a:hover {
+        text-decoration: underline; /* Adds underline on hover */
+      }
+    </style>
+  </head>
+  <body>
+    <!--<img id="logo" src="photo1.jpg" alt="Logo">-->
+    <div class="title">
+      <h1 style="text-align: center; font-size: 50px" alt="logo" id="logo">
+        Echo Eyes
+      </h1>
+      <h5
+        style="text-align: center; font-size: 20px"
+        alt="sub-logo"
+        id="sub-logo"
+      >
+        Made by, Jaxon
+      </h5>
+      <p alt="sub-desc" id="sub-desc">
+        This is a Face Recognition tool made for a school Steam project. This
+        project uses an Artificial Intelligence backend called 
+        <a href="https://loyahdev.me" target="_blank">
+      face-api.js</a> modified by me with many improvements, more accurate recognition and with models being trained with a more diverse set of faces.
+      
+      </p>
+    </div>
+
+    <div class="image-stuff">
+      <!--<input type="file" id="imageUploader" accept="image/*">-->
+      <video id="videoInput" width="720" height="560" autoplay muted></video>
+      <canvas
+        id="overlay"
+        width="720"
+        height="560"
+        style="position: absolute; top: 0; left: 0"
+      ></canvas>
+      <br />
+      <img id="imageDisplay" style="max-width: 500px; max-height: 500px" />
+      <br />
+      <button id="calculateButton" onclick="startDetection()" onclick="detectFaces()">Calculate</button>
+      <button id="stopButton" onclick="stopDetection()">Stop</button>
+      <pre id="results"></pre>
+    </div>
+
+    <script>
+      let isDetecting = false;
+
+      // Load models on page load
+      async function loadModels() {
+        await faceapi.nets.ssdMobilenetv1.loadFromUri(
+          "/models/ssd_mobilenetv1"
+        );
+        await faceapi.nets.ageGenderNet.loadFromUri(
+            "/models/age_gender_model"
+        );
+        await faceapi.nets.faceExpressionNet.loadFromUri(
+          "/models/face_expression"
+        );
+        await faceapi.nets.faceLandmark68Net.loadFromUri(
+          "/models/face_landmark_68"
+        );
+        // Load other models as needed
+      }
+
+      document.addEventListener("DOMContentLoaded", loadModels);
+
+      // Access the camera stream and start the video
+      async function startVideo() {
+        const video = document.getElementById("videoInput");
+        navigator.mediaDevices
+          .getUserMedia({ video: {} })
+          .then((stream) => {
+            video.srcObject = stream;
+          })
+          .catch((error) => {
+            console.error("Stream not found:", error);
+          });
+      }
+
+      startVideo();
+
+      async function detectFaces() {
+        if (isDetecting) {
+          // Only run detection if the flag is true
+          const video = document.getElementById("videoInput");
+          const overlay = document.getElementById("overlay");
+          const displaySize = { width: video.width, height: video.height };
+          faceapi.matchDimensions(overlay, displaySize);
+
+          // Perform detection with all the features
+          const fullDetections = await faceapi
+            .detectAllFaces(video, new faceapi.SsdMobilenetv1Options())
+            .withFaceLandmarks()
+            .withAgeAndGender()
+            .withFaceExpressions();
+
+          // Resize the detection results to match the display size
+          const resizedDetections = faceapi.resizeResults(
+            fullDetections,
+            displaySize
+          );
+          overlay
+            .getContext("2d")
+            .clearRect(0, 0, overlay.width, overlay.height);
+
+          // Draw the detections to the overlay canvas
+          //faceapi.draw.drawDetections(overlay, resizedDetections);
+          //faceapi.draw.drawFaceLandmarks(overlay, resizedDetections);
+          //faceapi.draw.drawFaceExpressions(overlay, resizedDetections);
+
+          resizedDetections.forEach(detection => {
+            let box = detection.detection.box;
+            const score = detection.detection.score;
+            const boxColor = score > 0.5 ? "green" : "red";
+          
+            // Set specific values for the box's size
+            const specificWidth = box.width + 30; // Add 20 pixels to the width
+            const specificHeight = box.height + 20; // Add 20 pixels to the height
+            box = new faceapi.Rect(box.x - 15, box.y - 10, specificWidth, specificHeight); // Adjust x and y to compensate for the increased size
+          
+            const drawBox = new faceapi.draw.DrawBox(box, {
+              label: `${parseInt(score * 100)}% a face`,
+              boxColor: boxColor,
+            });
+          
+            drawBox.draw(overlay);
+          });          
+              
+
+          // Draw age and gender
+          resizedDetections.forEach(detection => {
+            let box = detection.detection.box;
+            const { age, gender } = detection;
+            const text = `${parseInt(age)} years old, ${gender}`;
+            // Set specific values for the box's size
+            const specificWidth = box.width + 30; // Add 20 pixels to the width
+            const specificHeight = box.height + 20; // Add 20 pixels to the height
+            box = new faceapi.Rect(box.x - 15, box.y - 10, specificWidth, specificHeight); // Adjust x and y to compensate for the increased size
+            const anchor = { x: box.x, y: box.y };
+            new faceapi.draw.DrawTextField(
+              [text], anchor
+            ).draw(overlay);
+          });
+
+          // Prepare the results for displaying to the user, omitting the face landmarks
+          const resultsForDisplay = fullDetections.map((fd) => {
+            const { age, gender, genderProbability, expressions } = fd;
+            return { age, gender, genderProbability, expressions };
+          });
+
+          // Display the simplified results to the user
+          document.getElementById("results").innerText = JSON.stringify(
+            resultsForDisplay,
+            null,
+            2
+          );
+
+          // Continue detecting faces
+          requestAnimationFrame(detectFaces);
+        }
+      }
+
+      function stopDetection() {
+        isDetecting = false; // Set the flag to false to stop the loop
+      }
+
+      // Function to start detection again
+      function startDetection() {
+        if (!isDetecting) {
+          isDetecting = true;
+          requestAnimationFrame(detectFaces); // Restart the detection loop
+        }
+      }
+
+      // Set an interval or some event to call detectFaces periodically
+      // For example, every 100 milliseconds
+      //setInterval(detectFaces, 100);
+      //detectFaces();
+
+      function sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+    </script>
+  </body>
+</html>
